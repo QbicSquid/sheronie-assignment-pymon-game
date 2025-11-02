@@ -26,21 +26,100 @@ class Pymon:
         self.name = name
         self.current_location = None
 
+    def get_name(self):
+        return self.name
+
+    def set_name(self, name):
+        self.name = name
+
+    def get_current_location(self):
+        return self.current_location
+
+    def set_current_location(self, current_location):
+        self.current_location = current_location
+
     def move(self, direction=None):
         if self.current_location != None:
             if self.current_location.doors[direction] != None:
                 self.current_location.doors[direction].add_creature(self)
                 self.current_location.creatures.remove(self)
+                self.set_current_location(self.current_location.doors[direction])
             else:
                 print("no access to " + direction)
 
     def spawn(self, loc):
         if loc != None:
             loc.add_creature(self)
-            self.current_location = loc
+            self.set_current_location(loc)
+
+
+class Creature:
+    def __init__(self, name="New Creature", description="", location=None):
+        self.name = name
+        self.description = description
+        self.location = location
+
+    def get_name(self):
+        return self.name
+
+    def set_name(self, name):
+        self.name = name
+
+    def get_description(self):
+        return self.description
+
+    def set_description(self, description):
+        self.description = description
 
     def get_location(self):
-        return self.current_location
+        return self.location
+
+    def set_location(self, location):
+        self.location = location
+
+
+class PymonCreature(Creature):
+    def __init__(self, name="New Pymon", description="", location=None, speed=1):
+        super().__init__(name, description, location)
+        self.energy = 3
+        self.speed = speed
+
+    def get_energy(self):
+        return self.energy
+
+    def set_energy(self, energy):
+        self.energy = energy
+
+    def get_speed(self):
+        return self.speed
+
+    def set_speed(self, speed):
+        self.speed = speed
+
+    def move(self, direction=None):
+        if self.location != None:
+            if self.location.doors[direction] != None:
+                self.location.doors[direction].add_creature(self)
+                self.location.creatures.remove(self)
+                self.set_location(self.location.doors[direction])
+
+
+class Item:
+    def __init__(self, name="New Item", description="No description"):
+        self.name = name
+        self.description = description
+
+    def get_name(self):
+        return self.name
+
+    def set_name(self, name):
+        self.name = name
+
+    def get_description(self):
+        return self.description
+
+    def set_description(self, description):
+        self.description = description
 
 
 class Location:
@@ -55,12 +134,10 @@ class Location:
         self.items = []
 
     def add_creature(self, creature):
-        pass
-        # please implement this method to by simply appending a creature to self.creatures list.
+        self.creatures.append(creature)
 
     def add_item(self, item):
-        pass
-        # please implement this method to by simply appending an item to self.items list.
+        self.items.append(item)
 
     def connect_east(self, another_room):
         self.doors["east"] = another_room
@@ -81,11 +158,39 @@ class Location:
     def get_name(self):
         return self.name
 
+    def set_name(self, name):
+        self.name = name
+
+    def get_doors(self):
+        return self.doors
+
+    def set_doors(self, doors):
+        self.doors = doors
+
+    def get_creatures(self):
+        return self.creatures
+
+    def set_creatures(self, creatures):
+        self.creatures = creatures
+
+    def get_items(self):
+        return self.items
+
+    def set_items(self, items):
+        self.items = items
+
 
 class Record:
     def __init__(self):
         self.locations = []
-        # please implement constructor
+        self.creatures = []
+        self.items = []
+
+    def get_locations(self):
+        return self.locations
+
+    def set_locations(self, locations):
+        self.locations = locations
 
     def import_location(self):
         # please import data from locations.csv
@@ -96,9 +201,6 @@ class Record:
         self.locations.append(car_park)
 
         school.connect_west(car_park)
-
-    def get_locations(self):
-        return self.locations
 
     def import_creatures(self):
         pass  # please import data from creatures.csv
@@ -120,6 +222,18 @@ class Operation:
         self.locations = []
         self.current_pymon = Pymon("Kimimon")
 
+    def get_locations(self):
+        return self.locations
+
+    def set_locations(self, locations):
+        self.locations = locations
+
+    def get_current_pymon(self):
+        return self.current_pymon
+
+    def set_current_pymon(self, current_pymon):
+        self.current_pymon = current_pymon
+
     def setup(self):
         record = Record()
 
@@ -135,22 +249,22 @@ class Operation:
 
     def display_setup(self):
         for location in self.locations:
-            print(location.name + " has the following creatures:")
+            print(location.get_name() + " has the following creatures:")
             for creature in location.creatures:
-                print(creature.name)
+                print(creature.get_name())
 
     # you may use this test run to help test methods during development
     def test_run(self):
-        print(self.current_pymon.get_location().get_name())
+        print(self.current_pymon.get_current_location().get_name())
         self.current_pymon.move("west")
-        print(self.current_pymon.get_location().get_name())
+        print(self.current_pymon.get_current_location().get_name())
 
     def start_game(self):
         print("Welcome to Pymon World\n")
         print(
             "It's just you and your loyal Pymon roaming around to find more Pymons to capture and adopt.\n"
         )
-        print("You started at ", self.current_pymon.get_location().get_name())
+        print("You started at ", self.current_pymon.get_current_location().get_name())
         self.handle_menu()
 
 
