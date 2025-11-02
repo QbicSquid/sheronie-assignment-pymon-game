@@ -108,6 +108,8 @@ class Item:
     def __init__(self, name="New Item", description="No description"):
         self.name = name
         self.description = description
+        self.pickable = False
+        self.consumable = False
 
     def get_name(self):
         return self.name
@@ -121,10 +123,23 @@ class Item:
     def set_description(self, description):
         self.description = description
 
+    def get_pickable(self):
+        return self.pickable
+
+    def set_pickable(self, pickable):
+        self.pickable = pickable
+
+    def get_consumable(self):
+        return self.consumable
+
+    def set_consumable(self, consumable):
+        self.consumable = consumable
+
 
 class Location:
     def __init__(self, name="New room", w=None, n=None, e=None, s=None):
         self.name = name
+        self.description = ""
         self.doors = {}
         self.doors["west"] = w
         self.doors["north"] = n
@@ -161,6 +176,12 @@ class Location:
     def set_name(self, name):
         self.name = name
 
+    def get_description(self):
+        return self.description
+
+    def set_description(self, description):
+        self.description = description
+
     def get_doors(self):
         return self.doors
 
@@ -192,21 +213,178 @@ class Record:
     def set_locations(self, locations):
         self.locations = locations
 
+    def get_creatures(self):
+        return self.creatures
+
+    def set_creatures(self, creatures):
+        self.creatures = creatures
+
+    def get_items(self):
+        return self.items
+
+    def set_items(self, items):
+        self.items = items
+
     def import_location(self):
-        # please import data from locations.csv
-        # here are sample data to start with
+        # Import data from locations.csv
+        import csv
+        import os
+
+        # Try to find the CSV file in data directory first, then sample_data
+        csv_paths = [
+            os.path.join(os.path.dirname(__file__), "data", "locations.csv"),
+        ]
+
+        locations_dict = {}  # To store locations by name for connecting
+
+        for csv_path in csv_paths:
+            if os.path.exists(csv_path):
+                try:
+                    with open(csv_path, "r", encoding="utf-8") as file:
+                        csv_reader = csv.DictReader(file)
+                        rows = list(csv_reader)  # Read all rows into memory
+
+                        # First pass: create all locations
+                        for row in rows:
+                            name = row["name"].strip()
+                            description = row["description"].strip()
+                            location = Location(name)
+                            location.set_description(description)
+                            locations_dict[name] = location
+                            self.locations.append(location)
+
+                        # Second pass: connect locations
+                        for row in rows:
+                            name = row["name"].strip()
+                            current_location = locations_dict[name]
+
+                            # Connect directions (if not "None")
+                            directions = ["west", "north", "east", "south"]
+                            for direction in directions:
+                                connected_name = row[direction].strip()
+                                if connected_name and connected_name != "None":
+                                    if connected_name in locations_dict:
+                                        current_location.doors[direction] = (
+                                            locations_dict[connected_name]
+                                        )
+
+                    print(
+                        f"Successfully imported {len(self.locations)} locations from {csv_path}"
+                    )
+                    return  # Successfully imported, exit function
+
+                except Exception as e:
+                    print(f"Error reading {csv_path}: {e}")
+                    continue
+
+        # Fallback to original sample data if CSV import fails
+        print("Could not find or read locations.csv, using fallback data")
         school = Location("school")
         car_park = Location("car park")
         self.locations.append(school)
         self.locations.append(car_park)
-
         school.connect_west(car_park)
 
     def import_creatures(self):
-        pass  # please import data from creatures.csv
+        # Import data from creatures.csv
+        import csv
+        import os
+
+        # Try to find the CSV file in data directory first, then sample_data
+        csv_paths = [
+            os.path.join(os.path.dirname(__file__), "data", "creatures.csv"),
+        ]
+
+        for csv_path in csv_paths:
+            if os.path.exists(csv_path):
+                try:
+                    with open(csv_path, "r", encoding="utf-8") as file:
+                        csv_reader = csv.DictReader(file)
+
+                        for row in csv_reader:
+                            name = row["name"].strip()
+                            description = row[
+                                " description"
+                            ].strip()  # Note the space in the CSV header
+                            adoptable = row[" adoptable"].strip().lower() == "yes"
+                            speed = int(row["speed"].strip())
+
+                            # Create PymonCreature if adoptable, otherwise regular Creature
+                            if adoptable:
+                                creature = PymonCreature(name, description, None, speed)
+                            else:
+                                creature = Creature(name, description, None)
+
+                            self.creatures.append(creature)
+
+                            # Randomly assign creature to a location
+                            if self.locations:
+                                random_location = self.locations[
+                                    generate_random_number(len(self.locations) - 1)
+                                ]
+                                random_location.add_creature(creature)
+                                creature.set_location(random_location)
+
+                    print(
+                        f"Successfully imported {len(self.creatures)} creatures from {csv_path}"
+                    )
+                    return  # Successfully imported, exit function
+
+                except Exception as e:
+                    print(f"Error reading {csv_path}: {e}")
+                    continue
+
+        print("Could not find or read creatures.csv")
 
     def import_items(self):
-        pass  # please import data from items.csv
+        # Import data from items.csv
+        import csv
+        import os
+
+        # Try to find the CSV file in data directory first, then sample_data
+        csv_paths = [
+            os.path.join(os.path.dirname(__file__), "data", "items.csv"),
+        ]
+
+        for csv_path in csv_paths:
+            if os.path.exists(csv_path):
+                try:
+                    with open(csv_path, "r", encoding="utf-8") as file:
+                        csv_reader = csv.DictReader(file)
+
+                        for row in csv_reader:
+                            name = row["name"].strip()
+                            description = row[
+                                " description"
+                            ].strip()  # Note the space in CSV header
+                            # Additional attributes that might be needed later
+                            pickable = row[" pickable"].strip().lower() == "yes"
+                            consumable = row[" consumable"].strip().lower() == "yes"
+
+                            item = Item(name, description)
+                            # Set additional attributes using setters
+                            item.set_pickable(pickable)
+                            item.set_consumable(consumable)
+
+                            self.items.append(item)
+
+                            # Randomly assign item to a location
+                            if self.locations:
+                                random_location = self.locations[
+                                    generate_random_number(len(self.locations) - 1)
+                                ]
+                                random_location.add_item(item)
+
+                    print(
+                        f"Successfully imported {len(self.items)} items from {csv_path}"
+                    )
+                    return  # Successfully imported, exit function
+
+                except Exception as e:
+                    print(f"Error reading {csv_path}: {e}")
+                    continue
+
+        print("Could not find or read items.csv")
 
 
 class Operation:
@@ -237,15 +415,20 @@ class Operation:
     def setup(self):
         record = Record()
 
+        # Import all data from CSV files
         record.import_location()
+        record.import_creatures()
+        record.import_items()
+
+        # Add locations to the operation
         for location in record.get_locations():
             self.locations.append(location)
 
-        a_random_number = generate_random_number(len(self.locations) - 1)
-
-        spawned_loc = self.locations[a_random_number]
-
-        self.current_pymon.spawn(spawned_loc)
+        # Spawn the player's Pymon at a random location
+        if self.locations:
+            a_random_number = generate_random_number(len(self.locations) - 1)
+            spawned_loc = self.locations[a_random_number]
+            self.current_pymon.spawn(spawned_loc)
 
     def display_setup(self):
         for location in self.locations:
@@ -271,5 +454,5 @@ class Operation:
 if __name__ == "__main__":
     ops = Operation()
     ops.setup()
-    # ops.display_setup()
+    # ops.display_setup()  # Uncomment to see the loaded data
     ops.start_game()
