@@ -21,38 +21,6 @@ def generate_random_number(max_number=1):
     return r
 
 
-class Pymon:
-    def __init__(self, name="The player"):
-        self.name = name
-        self.current_location = None
-
-    def get_name(self):
-        return self.name
-
-    def set_name(self, name):
-        self.name = name
-
-    def get_current_location(self):
-        return self.current_location
-
-    def set_current_location(self, current_location):
-        self.current_location = current_location
-
-    def move(self, direction=None):
-        if self.current_location != None:
-            if self.current_location.doors[direction] != None:
-                self.current_location.doors[direction].add_creature(self)
-                self.current_location.creatures.remove(self)
-                self.set_current_location(self.current_location.doors[direction])
-            else:
-                print("no access to " + direction)
-
-    def spawn(self, loc):
-        if loc != None:
-            loc.add_creature(self)
-            self.set_current_location(loc)
-
-
 class Creature:
     def __init__(self, name="New Creature", description="", location=None):
         self.name = name
@@ -76,6 +44,54 @@ class Creature:
 
     def set_location(self, location):
         self.location = location
+
+
+class Pymon(Creature):
+    def __init__(self, name="Player", description="", location=None, energy=3, speed=1):
+        super().__init__(name=name, description=description, location=location)
+        self.energy = energy
+        self.speed = speed
+
+    def get_name(self):
+        return self.name
+
+    def set_name(self, name):
+        self.name = name
+
+    def get_location(self):
+        return self.location
+
+    def set_location(self, current_location):
+        self.location = current_location
+
+    def get_energy(self):
+        return self.energy
+
+    def set_energy(self, energy):
+        self.energy = energy
+
+    def get_speed(self):
+        return self.speed
+
+    def set_speed(self, speed):
+        self.speed = speed
+
+    def move(self, direction=None):
+        if self.location != None:
+            if self.location.doors[direction] != None:
+                self.location.doors[direction].add_creature(self)
+                self.location.creatures.remove(self)
+                self.set_location(self.location.doors[direction])
+                return True
+            else:
+                return False
+        else:
+            return False
+
+    def spawn(self, loc):
+        if loc != None:
+            loc.add_creature(self)
+            self.set_location(loc)
 
 
 class PymonCreature(Creature):
@@ -268,9 +284,6 @@ class Record:
                                             locations_dict[connected_name]
                                         )
 
-                    print(
-                        f"Successfully imported {len(self.locations)} locations from {csv_path}"
-                    )
                     return  # Successfully imported, exit function
 
                 except Exception as e:
@@ -325,9 +338,6 @@ class Record:
                                 random_location.add_creature(creature)
                                 creature.set_location(random_location)
 
-                    print(
-                        f"Successfully imported {len(self.creatures)} creatures from {csv_path}"
-                    )
                     return  # Successfully imported, exit function
 
                 except Exception as e:
@@ -375,9 +385,6 @@ class Record:
                                 ]
                                 random_location.add_item(item)
 
-                    print(
-                        f"Successfully imported {len(self.items)} items from {csv_path}"
-                    )
                     return  # Successfully imported, exit function
 
                 except Exception as e:
@@ -388,17 +395,32 @@ class Record:
 
 
 class Operation:
+    def __init__(self, locations=None, current_pymon=None):
+        self.locations = locations if locations is not None else []
+        self.current_pymon = (
+            current_pymon if current_pymon is not None else Pymon("Kimimon")
+        )
 
     def handle_menu(self):
-        print("Please issue a command to your Pymon:")
-        print("1) Inspect Pymon")
-        print("2) Inspect current location")
-        print("3) Move")
-        print("4) Exit the program")
-
-    def __init__(self):
-        self.locations = []
-        self.current_pymon = Pymon("Kimimon")
+        while True:
+            print("Please issue a command to your Pymon:")
+            print("1) Inspect Pymon")
+            print("2) Inspect current location")
+            print("3) Move")
+            print("4) Exit the program")
+            input_command = input()
+            if input_command == "1":
+                self.inspect_pymon()
+            elif input_command == "2":
+                self.inspect_location()
+            elif input_command == "3":
+                self.move_pymon()
+            elif input_command == "4":
+                print("Exiting the program.")
+                break
+            else:
+                print("Invalid command. Please try again.")
+            print()
 
     def get_locations(self):
         return self.locations
@@ -438,17 +460,39 @@ class Operation:
 
     # you may use this test run to help test methods during development
     def test_run(self):
-        print(self.current_pymon.get_current_location().get_name())
+        print(self.current_pymon.get_location().get_name())
         self.current_pymon.move("west")
-        print(self.current_pymon.get_current_location().get_name())
+        print(self.current_pymon.get_location().get_name())
 
     def start_game(self):
         print("Welcome to Pymon World\n")
         print(
             "It's just you and your loyal Pymon roaming around to find more Pymons to capture and adopt.\n"
         )
-        print("You started at ", self.current_pymon.get_current_location().get_name())
+        print("You started at ", self.current_pymon.get_location().get_name())
         self.handle_menu()
+
+    def inspect_pymon(self):
+        pymon = self.current_pymon
+        print(
+            f"Hi player, my name is {pymon.get_name()}, I am {pymon.get_description() if pymon.get_description() else 'just a regular Pymon'}."
+        )
+        print(f"My energy is {pymon.get_energy()}. What can I do to help you?")
+
+    def inspect_location(self):
+        location = self.current_pymon.get_location()
+        if location:
+            print(f"You are at {location.get_name()}, {location.get_description()}")
+        else:
+            print("Current Location: None")
+
+    def move_pymon(self):
+        direction = (
+            input("Moving to which direction? (west/north/east/south):").strip().lower()
+        )
+        isSuccessful = self.current_pymon.move(direction)
+        if not isSuccessful:
+            print("You can't move in that direction.")
 
 
 if __name__ == "__main__":
