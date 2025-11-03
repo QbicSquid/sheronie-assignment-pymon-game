@@ -274,6 +274,7 @@ class Record:
                             location = Location(name)
                             location.set_description(description)
 
+                            # Add items to location
                             items_names = (
                                 []
                                 if row["items"] == "None" or row["items"].strip() == ""
@@ -287,6 +288,14 @@ class Record:
                                         if item.get_name() == item_name:
                                             location.add_item(item)
                                             break
+                            
+                            # Add creatures to location
+                            for creature in self.creatures:
+                                if creature.get_location() is None:
+                                    # Randomly assign creature to location
+                                    if generate_random_number(len(rows) - 1) == rows.index(row):
+                                        location.add_creature(creature)
+                                        creature.set_location(location)
 
                             locations_dict[name] = location
                             self.locations.append(location)
@@ -466,8 +475,8 @@ class Operation:
 
         # Import all data from CSV files
         record.import_items()
-        record.import_location(record.get_items())
         record.import_creatures()
+        record.import_location(record.get_items())
 
         # Add locations to the operation
         for location in record.get_locations():
