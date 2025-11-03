@@ -15,6 +15,16 @@ Please make modifications to all the classes to match with requirements provided
 import random
 
 
+# Custom Exceptions
+class InvalidDirectionException(Exception):
+    """Exception thrown when selected direction does not contain any location"""
+    pass
+
+class InvalidInputFileFormat(Exception):
+    """Exception thrown when CSV file has invalid content or incorrect format"""
+    pass
+
+
 # you may use, extend and modify the following random generator
 def generate_random_number(max_number=1):
     r = random.randint(0, max_number)
@@ -51,6 +61,8 @@ class Pymon(Creature):
         super().__init__(name=name, description=description, location=location)
         self.energy = energy
         self.speed = speed
+        self.move_count = 0
+        self.has_pogo_boost = False
 
     def get_name(self):
         return self.name
@@ -76,12 +88,39 @@ class Pymon(Creature):
     def set_speed(self, speed):
         self.speed = speed
 
+    def get_move_count(self):
+        return self.move_count
+
+    def set_move_count(self, move_count):
+        self.move_count = move_count
+
+    def get_has_pogo_boost(self):
+        return self.has_pogo_boost
+
+    def set_has_pogo_boost(self, has_pogo_boost):
+        self.has_pogo_boost = has_pogo_boost
+
     def move(self, direction=None):
         if self.location != None:
             if self.location.doors[direction] != None:
                 self.location.doors[direction].add_creature(self)
                 self.location.creatures.remove(self)
                 self.set_location(self.location.doors[direction])
+                
+                # Increment move count and check energy depletion
+                self.move_count += 1
+                if self.move_count >= 2:
+                    self.move_count = 0
+                    current_energy = self.get_energy()
+                    if current_energy > 0:
+                        self.set_energy(current_energy - 1)
+                        print(f"{self.get_name()}'s energy decreased to {self.get_energy()}")
+                        
+                        # Check if energy is depleted
+                        if self.get_energy() <= 0:
+                            print(f"{self.get_name()} has run out of energy and escaped into the wild!")
+                            return "energy_depleted"
+                
                 return True
             else:
                 return False
@@ -92,6 +131,35 @@ class Pymon(Creature):
         if loc != None:
             loc.add_creature(self)
             self.set_location(loc)
+
+    def use_item(self, item, inventory):
+        """Use an item from inventory"""
+        if item not in inventory:
+            return "Item not in inventory"
+            
+        item_name = item.get_name().lower()
+        
+        # Handle edible items (like apple)
+        if item.get_consumable():
+            current_energy = self.get_energy()
+            if current_energy < 3:
+                self.set_energy(min(current_energy + 1, 3))
+                inventory.remove(item)
+                return f"{self.get_name()} ate the {item.get_name()} and gained energy! Energy: {self.get_energy()}"
+            else:
+                return f"{self.get_name()} is already at maximum energy (3)"
+        
+        # Handle pogo stick
+        elif "pogo" in item_name:
+            self.set_has_pogo_boost(True)
+            return f"{self.get_name()} is now ready to use the pogo stick in the next race!"
+        
+        # Handle binocular  
+        elif "binocular" in item_name:
+            return "binocular_ready"  # Special return to indicate binocular usage
+        
+        else:
+            return f"The {item.get_name()} cannot be used"
 
 
 class PymonCreature(Creature):
@@ -266,39 +334,54 @@ class Record:
                     with open(csv_path, "r", encoding="utf-8") as file:
                         csv_reader = csv.DictReader(file)
                         rows = list(csv_reader)  # Read all rows into memory
+                        
+                        # Validate CSV format
+                        required_columns = ["name", "description", "west", "north", "east", "south"]
+                        if not all(col in csv_reader.fieldnames for col in required_columns):
+                            raise InvalidInputFileFormat(f"Missing required columns in {csv_path}")
 
                         # First pass: create all locations
                         for row in rows:
-                            name = row["name"].strip()
-                            description = row["description"].strip()
-                            location = Location(name)
-                            location.set_description(description)
+                            try:
+                                name = row["name"].strip()
+                                description = row["description"].strip()
+                                
+                                if not name:
+                                    raise InvalidInputFileFormat("Location name cannot be empty")
+                                    
+                                location = Location(name)
+                                location.set_description(description)
 
-                            # Add items to location
-                            items_names = (
-                                []
-                                if row["items"] == "None" or row["items"].strip() == ""
-                                else row["items"].strip().split("-")
-                            )
-                            for item_name in items_names:
-                                item_name = item_name.strip()
-                                if item_name:
-                                    # Find the item in the provided items list
-                                    for item in imported_items:
-                                        if item.get_name() == item_name:
-                                            location.add_item(item)
-                                            break
-                            
-                            # Add creatures to location
-                            for creature in self.creatures:
-                                if creature.get_location() is None:
-                                    # Randomly assign creature to location
-                                    if generate_random_number(len(rows) - 1) == rows.index(row):
-                                        location.add_creature(creature)
-                                        creature.set_location(location)
+                                # Add items to location
+                                items_names = (
+                                    []
+                                    if "items" not in row or row["items"] == "None" or row["items"].strip() == ""
+                                    else row["items"].strip().split("-")
+                                )
+                                for item_name in items_names:
+                                    item_name = item_name.strip()
+                                    if item_name:
+                                        # Find the item in the provided items list
+                                        for item in imported_items:
+                                            if item.get_name() == item_name:
+                                                location.add_item(item)
+                                                break
+                                
+                                # Add creatures to location
+                                for creature in self.creatures:
+                                    if creature.get_location() is None:
+                                        # Randomly assign creature to location
+                                        if generate_random_number(len(rows) - 1) == rows.index(row):
+                                            location.add_creature(creature)
+                                            creature.set_location(location)
 
-                            locations_dict[name] = location
-                            self.locations.append(location)
+                                locations_dict[name] = location
+                                self.locations.append(location)
+                                
+                            except KeyError as e:
+                                raise InvalidInputFileFormat(f"Missing column {e} in CSV file")
+                            except Exception as e:
+                                raise InvalidInputFileFormat(f"Error processing location data: {e}")
 
                         # Second pass: connect locations
                         for row in rows:
@@ -344,30 +427,54 @@ class Record:
                 try:
                     with open(csv_path, "r", encoding="utf-8") as file:
                         csv_reader = csv.DictReader(file)
+                        
+                        # Validate CSV format
+                        required_columns = ["name", " description", " adoptable", "speed"]
+                        if not all(col in csv_reader.fieldnames for col in required_columns):
+                            raise InvalidInputFileFormat(f"Missing required columns in creatures.csv")
 
                         for row in csv_reader:
-                            name = row["name"].strip()
-                            description = row[
-                                " description"
-                            ].strip()  # Note the space in the CSV header
-                            adoptable = row[" adoptable"].strip().lower() == "yes"
-                            speed = int(row["speed"].strip())
+                            try:
+                                name = row["name"].strip()
+                                description = row[" description"].strip()  # Note the space in the CSV header
+                                
+                                if not name:
+                                    raise InvalidInputFileFormat("Creature name cannot be empty")
+                                
+                                adoptable_str = row[" adoptable"].strip().lower()
+                                if adoptable_str not in ["yes", "no"]:
+                                    raise InvalidInputFileFormat("Adoptable field must be 'yes' or 'no'")
+                                adoptable = adoptable_str == "yes"
+                                
+                                try:
+                                    speed = int(row["speed"].strip())
+                                    if speed < 0:
+                                        raise InvalidInputFileFormat("Speed cannot be negative")
+                                except ValueError:
+                                    raise InvalidInputFileFormat("Speed must be a valid integer")
 
-                            # Create PymonCreature if adoptable, otherwise regular Creature
-                            if adoptable:
-                                creature = PymonCreature(name, description, None, speed)
-                            else:
-                                creature = Creature(name, description, None)
+                                # Create PymonCreature if adoptable, otherwise regular Creature
+                                if adoptable:
+                                    creature = PymonCreature(name, description, None, speed)
+                                else:
+                                    creature = Creature(name, description, None)
 
-                            self.creatures.append(creature)
+                                self.creatures.append(creature)
 
-                            # Randomly assign creature to a location
-                            if self.locations:
-                                random_location = self.locations[
-                                    generate_random_number(len(self.locations) - 1)
-                                ]
-                                random_location.add_creature(creature)
-                                creature.set_location(random_location)
+                                # Randomly assign creature to a location
+                                if self.locations:
+                                    random_location = self.locations[
+                                        generate_random_number(len(self.locations) - 1)
+                                    ]
+                                    random_location.add_creature(creature)
+                                    creature.set_location(random_location)
+                                    
+                            except KeyError as e:
+                                raise InvalidInputFileFormat(f"Missing column {e} in creatures.csv")
+                            except InvalidInputFileFormat:
+                                raise  # Re-raise our custom exceptions
+                            except Exception as e:
+                                raise InvalidInputFileFormat(f"Error processing creature data: {e}")
 
                     return  # Successfully imported, exit function
 
@@ -437,26 +544,31 @@ class Operation:
             print("1) Inspect Pymon")
             print("2) Inspect current location")
             print("3) Move")
-            print("4) Exit the program")
-            print("5) Pick up item")
-            print("6) View inventory")
-            print("7) Challenge a creature")
+            print("4) Pick an item")
+            print("5) View inventory")
+            print("6) Challenge a creature")
+            print("7) Generate stats")
+            print("8) Exit the program")
             input_command = input()
             if input_command == "1":
                 self.inspect_pymon()
             elif input_command == "2":
                 self.inspect_location()
             elif input_command == "3":
-                self.move_pymon()
+                result = self.move_pymon()
+                if result == "game_over":
+                    break
             elif input_command == "4":
+                self.pick_up_item()
+            elif input_command == "5":
+                self.view_inventory()
+            elif input_command == "6":
+                self.challenge_creature()
+            elif input_command == "7":
+                self.generate_stats()
+            elif input_command == "8":
                 print("Exiting the program.")
                 break
-            elif input_command == "5":
-                self.pick_up_item()
-            elif input_command == "6":
-                self.view_inventory()
-            elif input_command == "7":
-                self.challenge_creature()
             else:
                 print("Invalid command. Please try again.")
             print()
@@ -546,12 +658,40 @@ class Operation:
             print("Current Location: None")
 
     def move_pymon(self):
-        direction = (
-            input("Moving to which direction? (west/north/east/south):").strip().lower()
-        )
-        isSuccessful = self.current_pymon.move(direction)
-        if not isSuccessful:
-            print("You can't move in that direction.")
+        try:
+            direction = (
+                input("Moving to which direction? (west/north/east/south):").strip().lower()
+            )
+            
+            # Check if direction is valid
+            location = self.current_pymon.get_location()
+            if direction not in ["west", "north", "east", "south"]:
+                raise InvalidDirectionException("Invalid direction specified")
+            
+            if not location or location.doors[direction] is None:
+                raise InvalidDirectionException(f"No location exists in the {direction} direction")
+            
+            result = self.current_pymon.move(direction)
+            
+            if result == "energy_depleted":
+                # Move Pymon to random location
+                if self.locations:
+                    random_location = self.locations[generate_random_number(len(self.locations) - 1)]
+                    self.current_pymon.spawn(random_location)
+                    print(f"{self.current_pymon.get_name()} has been moved to {random_location.get_name()}")
+                    
+                    # Check if this is game over (only one Pymon)
+                    print("GAME OVER - Your Pymon has escaped!")
+                    return "game_over"
+            elif not result:
+                print("You can't move in that direction.")
+            else:
+                print(f"Moved to {self.current_pymon.get_location().get_name()}")
+                
+        except InvalidDirectionException as e:
+            print(f"Error: {e}")
+        
+        return "continue"
 
     def pick_up_item(self):
         location = self.current_pymon.get_location()
@@ -579,10 +719,131 @@ class Operation:
     def view_inventory(self):
         if self.inventory and len(self.inventory) > 0:
             print("You are carrying:")
-            for item in self.inventory:
-                print(f"- {item.get_name()}: {item.get_description()}")
+            for i, item in enumerate(self.inventory, 1):
+                print(f"{i}) {item.get_name()}: {item.get_description()}")
+            
+            print("\nWould you like to use an item? (y/n)")
+            choice = input().strip().lower()
+            if choice == 'y':
+                self.use_item_menu()
         else:
             print("Your inventory is empty.")
+
+    def use_item_menu(self):
+        if not self.inventory:
+            print("No items to use.")
+            return
+            
+        print("Select item to use:")
+        for i, item in enumerate(self.inventory, 1):
+            print(f"{i}) {item.get_name()}")
+        
+        try:
+            choice = int(input("Enter item number: ")) - 1
+            if 0 <= choice < len(self.inventory):
+                item = self.inventory[choice]
+                result = self.current_pymon.use_item(item, self.inventory)
+                
+                if result == "binocular_ready":
+                    self.use_binocular()
+                else:
+                    print(result)
+                    
+                    # Remove pogo stick after use (it breaks)
+                    if "pogo" in item.get_name().lower() and self.current_pymon.get_has_pogo_boost():
+                        # Don't remove yet - it will be removed after the next race
+                        pass
+            else:
+                print("Invalid item number.")
+        except ValueError:
+            print("Please enter a valid number.")
+
+    def use_binocular(self):
+        print("Using binocular! Enter direction to inspect:")
+        print("Options: current, west, north, east, south")
+        direction = input().strip().lower()
+        
+        location = self.current_pymon.get_location()
+        if not location:
+            print("You are not in any location.")
+            return
+            
+        if direction == "current":
+            creatures = [c.get_name() for c in location.get_creatures() if c != self.current_pymon]
+            items = [i.get_name() for i in location.get_items()]
+            
+            output = []
+            if creatures:
+                output.append(", ".join(creatures))
+            if items:
+                output.append(", ".join(items))
+                
+            # Check connected directions
+            connections = []
+            for dir_name, connected_loc in location.get_doors().items():
+                if connected_loc:
+                    connections.append(f"in the {dir_name} is {connected_loc.get_name()}")
+            
+            if connections:
+                output.extend(connections)
+            
+            if output:
+                print(f"Current location: {', '.join(output)}")
+            else:
+                print("Current location appears empty with no connections.")
+                
+        elif direction in ["west", "north", "east", "south"]:
+            connected_location = location.doors.get(direction)
+            if connected_location:
+                creatures = [c.get_name() for c in connected_location.get_creatures()]
+                items = [i.get_name() for i in connected_location.get_items()]
+                
+                output_parts = []
+                if items:
+                    output_parts.append(f"an edible {items[0]}" if items[0].lower() in ["apple"] else items[0])
+                if creatures:
+                    if len(creatures) == 1:
+                        output_parts.append(f"another {creatures[0]}")
+                    else:
+                        output_parts.append(f"{len(creatures)} creatures")
+                
+                if output_parts:
+                    print(f"In the {direction}, there seems to be {connected_location.get_name()} with {' and '.join(output_parts)} nearby")
+                else:
+                    print(f"In the {direction}, there seems to be {connected_location.get_name()} but it appears empty")
+            else:
+                print(f"This direction leads nowhere")
+        else:
+            print("Invalid direction. Use: current, west, north, east, south")
+
+    def generate_stats(self):
+        print("=== Game Statistics ===")
+        print(f"Player Pymon: {self.current_pymon.get_name()}")
+        print(f"Energy: {self.current_pymon.get_energy()}/3")
+        print(f"Speed: {self.current_pymon.get_speed()}")
+        print(f"Current Location: {self.current_pymon.get_location().get_name() if self.current_pymon.get_location() else 'None'}")
+        print(f"Moves made: {self.current_pymon.get_move_count()}")
+        print(f"Items in inventory: {len(self.inventory)}")
+        
+        if self.inventory:
+            print("Inventory items:")
+            for item in self.inventory:
+                print(f"  - {item.get_name()}")
+        
+        print(f"Total locations discovered: {len(self.locations)}")
+        
+        # Count creatures and Pymons
+        total_creatures = 0
+        total_pymons = 0
+        for location in self.locations:
+            for creature in location.get_creatures():
+                if creature != self.current_pymon:
+                    total_creatures += 1
+                    if isinstance(creature, PymonCreature):
+                        total_pymons += 1
+        
+        print(f"Total creatures in world: {total_creatures}")
+        print(f"Total Pymons in world: {total_pymons}")
 
     def challenge_creature(self):
         location = self.current_pymon.get_location()
@@ -636,6 +897,20 @@ class Operation:
         player_roll = generate_random_number(10) + player_speed
         opponent_roll = generate_random_number(10) + opponent_speed
         
+        # Apply pogo stick boost if available
+        if self.current_pymon.get_has_pogo_boost():
+            player_roll = player_roll * 2
+            print(f"🚀 Pogo stick boost activated! {self.current_pymon.get_name()}'s performance doubled!")
+            
+            # Remove pogo stick from inventory (it breaks after use)
+            for item in self.inventory:
+                if "pogo" in item.get_name().lower():
+                    self.inventory.remove(item)
+                    print(f"💥 The pogo stick breaks and disappears from inventory!")
+                    break
+            
+            self.current_pymon.set_has_pogo_boost(False)
+        
         print(f"\n{self.current_pymon.get_name()} races with total performance: {player_roll}")
         print(f"{opponent.get_name()} races with total performance: {opponent_roll}")
         
@@ -644,7 +919,7 @@ class Operation:
             print("Your Pymon gains confidence and energy!")
             # Boost player's energy as a reward
             current_energy = self.current_pymon.get_energy()
-            self.current_pymon.set_energy(min(current_energy + 1, 10))  # Cap at 10
+            self.current_pymon.set_energy(min(current_energy + 1, 3))  # Cap at 3
         elif player_roll < opponent_roll:
             print(f"\n😞 {opponent.get_name()} wins the race!")
             print("Your Pymon is tired from the effort.")
