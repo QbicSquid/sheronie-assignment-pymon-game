@@ -440,6 +440,7 @@ class Operation:
             print("4) Exit the program")
             print("5) Pick up item")
             print("6) View inventory")
+            print("7) Challenge a creature")
             input_command = input()
             if input_command == "1":
                 self.inspect_pymon()
@@ -454,6 +455,8 @@ class Operation:
                 self.pick_up_item()
             elif input_command == "6":
                 self.view_inventory()
+            elif input_command == "7":
+                self.challenge_creature()
             else:
                 print("Invalid command. Please try again.")
             print()
@@ -519,6 +522,26 @@ class Operation:
         location = self.current_pymon.get_location()
         if location:
             print(f"You are at {location.get_name()}, {location.get_description()}")
+            
+            # Show creatures in the location
+            creatures = location.get_creatures()
+            other_creatures = [c for c in creatures if c != self.current_pymon]
+            if other_creatures:
+                print("Other creatures here:")
+                for creature in other_creatures:
+                    creature_type = "Pymon" if isinstance(creature, PymonCreature) else "Creature"
+                    print(f"- {creature.get_name()} ({creature_type})")
+            else:
+                print("No other creatures are here.")
+                
+            # Show items in the location
+            items = location.get_items()
+            if items:
+                print("Items here:")
+                for item in items:
+                    print(f"- {item.get_name()}: {item.get_description()}")
+            else:
+                print("No items are here.")
         else:
             print("Current Location: None")
 
@@ -560,6 +583,104 @@ class Operation:
                 print(f"- {item.get_name()}: {item.get_description()}")
         else:
             print("Your inventory is empty.")
+
+    def challenge_creature(self):
+        location = self.current_pymon.get_location()
+        if not location:
+            print("You are not in any location.")
+            return
+            
+        creatures = location.get_creatures()
+        if not creatures or len(creatures) <= 1:  # Only player's Pymon is present
+            print("There are no other creatures here to challenge.")
+            return
+            
+        # Display available creatures to challenge
+        other_creatures = [c for c in creatures if c != self.current_pymon]
+        print("Creatures available to challenge:")
+        for i, creature in enumerate(other_creatures, 1):
+            print(f"{i}) {creature.get_name()}")
+            
+        try:
+            choice = input("Choose a creature to challenge (enter number): ").strip()
+            creature_index = int(choice) - 1
+            
+            if creature_index < 0 or creature_index >= len(other_creatures):
+                print("Invalid choice.")
+                return
+                
+            target_creature = other_creatures[creature_index]
+            
+            # Check if it's a PymonCreature (adoptable Pymon)
+            if isinstance(target_creature, PymonCreature):
+                self.race_against_pymon(target_creature)
+            else:
+                # Humorous responses for non-Pymon creatures
+                self.humorous_challenge_response(target_creature)
+                
+        except (ValueError, IndexError):
+            print("Invalid input. Please enter a valid number.")
+
+    def race_against_pymon(self, opponent):
+        print(f"\n{self.current_pymon.get_name()} challenges {opponent.get_name()} to a race!")
+        print("The race begins!")
+        
+        # Get speeds
+        player_speed = self.current_pymon.get_speed()
+        opponent_speed = opponent.get_speed()
+        
+        print(f"{self.current_pymon.get_name()}'s speed: {player_speed}")
+        print(f"{opponent.get_name()}'s speed: {opponent_speed}")
+        
+        # Add some randomness to make it more interesting
+        player_roll = generate_random_number(10) + player_speed
+        opponent_roll = generate_random_number(10) + opponent_speed
+        
+        print(f"\n{self.current_pymon.get_name()} races with total performance: {player_roll}")
+        print(f"{opponent.get_name()} races with total performance: {opponent_roll}")
+        
+        if player_roll > opponent_roll:
+            print(f"\n🏆 {self.current_pymon.get_name()} wins the race!")
+            print("Your Pymon gains confidence and energy!")
+            # Boost player's energy as a reward
+            current_energy = self.current_pymon.get_energy()
+            self.current_pymon.set_energy(min(current_energy + 1, 10))  # Cap at 10
+        elif player_roll < opponent_roll:
+            print(f"\n😞 {opponent.get_name()} wins the race!")
+            print("Your Pymon is tired from the effort.")
+            # Reduce player's energy as consequence
+            current_energy = self.current_pymon.get_energy()
+            self.current_pymon.set_energy(max(current_energy - 1, 0))  # Don't go below 0
+        else:
+            print(f"\n🤝 It's a tie! Both Pymons performed equally well!")
+            print("Both Pymons respect each other's abilities.")
+
+    def humorous_challenge_response(self, creature):
+        creature_name = creature.get_name().lower()
+        
+        # Predefined humorous responses based on creature types
+        responses = {
+            'sheep': f"The {creature.get_name()} just ignored you and continued grazing peacefully.",
+            'chicken': f"The {creature.get_name()} just laughed at you with a loud 'cluck cluck!'",
+            'tree': f"The {creature.get_name()} stands still, completely unimpressed by your challenge.",
+            'rock': f"The {creature.get_name()} remains motionless, as rocks tend to do.",
+            'cat': f"The {creature.get_name()} gives you a dismissive look and walks away with attitude.",
+            'dog': f"The {creature.get_name()} wags its tail, thinking you want to play fetch instead.",
+            'fish': f"The {creature.get_name()} just blows bubbles at you, clearly confused.",
+        }
+        
+        # Check for specific creature names or use a generic response
+        response_given = False
+        for key, response in responses.items():
+            if key in creature_name:
+                print(f"\n{response}")
+                response_given = True
+                break
+                
+        if not response_given:
+            # Generic humorous response for unknown creatures
+            print(f"\nThe {creature.get_name()} looks at you with confusion and tilts its head.")
+            print("It seems like it doesn't understand what a 'race' is!")
 
 
 if __name__ == "__main__":
