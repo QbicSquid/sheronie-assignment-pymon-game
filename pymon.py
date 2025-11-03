@@ -170,6 +170,13 @@ class Location:
     def add_item(self, item):
         self.items.append(item)
 
+    def remove_item(self, item_name):
+        for item in self.items:
+            if item.get_name() == item_name:
+                self.items.remove(item)
+                return True
+        return False
+
     def connect_east(self, another_room):
         self.doors["east"] = another_room
         another_room.doors["west"] = self
@@ -241,7 +248,7 @@ class Record:
     def set_items(self, items):
         self.items = items
 
-    def import_location(self):
+    def import_location(self, imported_items=[]):
         # Import data from locations.csv
         import csv
         import os
@@ -266,6 +273,21 @@ class Record:
                             description = row["description"].strip()
                             location = Location(name)
                             location.set_description(description)
+
+                            items_names = (
+                                []
+                                if row["items"] == "None" or row["items"].strip() == ""
+                                else row["items"].strip().split("-")
+                            )
+                            for item_name in items_names:
+                                item_name = item_name.strip()
+                                if item_name:
+                                    # Find the item in the provided items list
+                                    for item in imported_items:
+                                        if item.get_name() == item_name:
+                                            location.add_item(item)
+                                            break
+
                             locations_dict[name] = location
                             self.locations.append(location)
 
@@ -364,12 +386,10 @@ class Record:
 
                         for row in csv_reader:
                             name = row["name"].strip()
-                            description = row[
-                                " description"
-                            ].strip()  # Note the space in CSV header
+                            description = row["description"].strip()  # Note the space in CSV header
                             # Additional attributes that might be needed later
-                            pickable = row[" pickable"].strip().lower() == "yes"
-                            consumable = row[" consumable"].strip().lower() == "yes"
+                            pickable = row["pickable"].strip().lower() == "yes"
+                            consumable = row["consumable"].strip().lower() == "yes"
 
                             item = Item(name, description)
                             # Set additional attributes using setters
@@ -400,6 +420,7 @@ class Operation:
         self.current_pymon = (
             current_pymon if current_pymon is not None else Pymon("Kimimon")
         )
+        self.inventory = []
 
     def handle_menu(self):
         while True:
@@ -408,6 +429,8 @@ class Operation:
             print("2) Inspect current location")
             print("3) Move")
             print("4) Exit the program")
+            print("5) Pick up item")
+            print("6) View inventory")
             input_command = input()
             if input_command == "1":
                 self.inspect_pymon()
@@ -418,6 +441,10 @@ class Operation:
             elif input_command == "4":
                 print("Exiting the program.")
                 break
+            elif input_command == "5":
+                self.pick_up_item()
+            elif input_command == "6":
+                self.view_inventory()
             else:
                 print("Invalid command. Please try again.")
             print()
@@ -438,9 +465,9 @@ class Operation:
         record = Record()
 
         # Import all data from CSV files
-        record.import_location()
-        record.import_creatures()
         record.import_items()
+        record.import_location(record.get_items())
+        record.import_creatures()
 
         # Add locations to the operation
         for location in record.get_locations():
@@ -493,6 +520,37 @@ class Operation:
         isSuccessful = self.current_pymon.move(direction)
         if not isSuccessful:
             print("You can't move in that direction.")
+
+    def pick_up_item(self):
+        location = self.current_pymon.get_location()
+        if location:
+            items = location.get_items()
+            if items and len(items) > 0:
+                print(
+                    f"Items available to pick up: {', '.join(item.get_name() for item in items)}"
+                )
+            else:
+                print("There are no items to pick up here.")
+                return
+            print("Picking what?")
+            input_item_name = input().strip()
+            for item in location.get_items():
+                if item.get_name().lower() == input_item_name.lower():
+                    if item.get_pickable():
+                        self.inventory.append(item)
+                        location.remove_item(item.get_name())
+                        print(f"You picked up the {item.get_name()}.")
+                    else:
+                        print(f"The {item.get_name()} cannot be picked up.")
+                    return
+
+    def view_inventory(self):
+        if self.inventory and len(self.inventory) > 0:
+            print("You are carrying:")
+            for item in self.inventory:
+                print(f"- {item.get_name()}: {item.get_description()}")
+        else:
+            print("Your inventory is empty.")
 
 
 if __name__ == "__main__":
